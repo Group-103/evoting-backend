@@ -8,8 +8,8 @@ const { sendPasswordResetOTP } = require('../utils/emailService');
  * Request password reset OTP
  * 
  * Flow:
- * 1. Candidate enters email
- * 2. System finds user (must be CANDIDATE role)
+ * 1. User enters email
+ * 2. System finds user (any role: ADMIN, OFFICER, CANDIDATE)
  * 3. Generates OTP
  * 4. Sends OTP via email
  * 5. Stores hashed OTP in database
@@ -36,12 +36,8 @@ exports.requestPasswordReset = async (req, res) => {
       });
     }
 
-    // Only allow password reset for CANDIDATE role
-    if (user.role !== 'CANDIDATE') {
-      return res.json({
-        message: 'If an account with that email exists, a password reset code has been sent.',
-      });
-    }
+    // Allow password reset for all roles (ADMIN, OFFICER, CANDIDATE)
+    // No role restriction needed
 
     // Check if user is active
     if (user.status !== 'ACTIVE') {
@@ -94,7 +90,7 @@ exports.requestPasswordReset = async (req, res) => {
       await prisma.passwordReset.delete({
         where: { id: passwordReset.id }
       });
-      
+
       // Don't fail the request, but log it
       await logAudit({
         actorType: 'system',
@@ -103,7 +99,7 @@ exports.requestPasswordReset = async (req, res) => {
         entityId: passwordReset.id,
         payload: { userId: user.id, error: emailError.message },
       });
-      
+
       return res.status(500).json({
         error: 'Failed to send password reset email. Please try again later.',
       });
@@ -111,7 +107,7 @@ exports.requestPasswordReset = async (req, res) => {
 
     // Log audit
     await logAudit({
-      actorType: 'candidate',
+      actorType: user.role.toLowerCase(),
       actorId: user.id,
       action: 'PASSWORD_RESET_REQUESTED',
       entity: 'password_reset',
@@ -157,10 +153,8 @@ exports.verifyResetOTP = async (req, res) => {
       return res.status(404).json({ error: 'Invalid email or OTP' });
     }
 
-    // Only allow for CANDIDATE role
-    if (user.role !== 'CANDIDATE') {
-      return res.status(403).json({ error: 'Password reset is only available for candidates' });
-    }
+    // Allow for all roles (ADMIN, OFFICER, CANDIDATE)
+    // No role restriction needed
 
     // Find most recent unverified password reset
     const passwordReset = await prisma.passwordReset.findFirst({
@@ -206,7 +200,7 @@ exports.verifyResetOTP = async (req, res) => {
 
     // Log audit
     await logAudit({
-      actorType: 'candidate',
+      actorType: user.role.toLowerCase(),
       actorId: user.id,
       action: 'PASSWORD_RESET_OTP_VERIFIED',
       entity: 'password_reset',
@@ -294,7 +288,7 @@ exports.resetPassword = async (req, res) => {
 
     // Log audit
     await logAudit({
-      actorType: 'candidate',
+      actorType: passwordReset.user.role.toLowerCase(),
       actorId: passwordReset.userId,
       action: 'PASSWORD_RESET_COMPLETED',
       entity: 'user',
