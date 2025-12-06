@@ -37,6 +37,29 @@ exports.requestOTP = async (req, res) => {
       return res.status(400).json({ error: 'Voter is not eligible' });
     }
 
+    // Check if any elections are set up
+    const positions = await prisma.position.findMany();
+
+    if (positions.length === 0) {
+      return res.status(400).json({
+        error: 'No elections are currently available. Please check back later or contact your administrator.',
+        hint: 'Elections have not been set up yet'
+      });
+    }
+
+    // Check if any elections are currently active or upcoming
+    const now = new Date();
+    const activeOrUpcomingPositions = positions.filter(p =>
+      new Date(p.endDate) > now
+    );
+
+    if (activeOrUpcomingPositions.length === 0) {
+      return res.status(400).json({
+        error: 'No elections are currently available. Please check back later or contact your administrator.',
+        hint: 'All elections have ended'
+      });
+    }
+
     // Check if voter has already voted (prevent repeat verification)
     const existingBallot = await prisma.ballot.findFirst({
       where: {
