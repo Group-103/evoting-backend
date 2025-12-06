@@ -473,6 +473,119 @@ exports.exportReport = async (req, res) => {
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=audit-log.csv');
         return res.send(csv);
+      } else if (type.endsWith('pdf')) {
+        // Generate PDF for audit log
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename=audit-log.pdf');
+        doc.pipe(res);
+
+        // Header
+        doc.fillColor('#000000')
+          .fontSize(24)
+          .font('Helvetica-Bold')
+          .text('Audit Log Report', 50, 50, { align: 'center', width: doc.page.width - 100 });
+
+        doc.fontSize(10)
+          .font('Helvetica')
+          .text(`Generated: ${new Date().toLocaleString()}`, 50, 80, { align: 'center', width: doc.page.width - 100 });
+
+        doc.fontSize(10)
+          .text(`Total Records: ${logs.length}`, 50, 95, { align: 'center', width: doc.page.width - 100 });
+
+        doc.y = 120;
+
+        // Table header
+        const tableTop = doc.y;
+        const colWidths = {
+          date: 100,
+          actor: 80,
+          action: 100,
+          entity: 80,
+          details: 135
+        };
+
+        doc.fillColor('#2563eb')
+          .fontSize(9)
+          .font('Helvetica-Bold');
+
+        let xPos = 50;
+        doc.text('Date/Time', xPos, tableTop, { width: colWidths.date });
+        xPos += colWidths.date;
+        doc.text('Actor', xPos, tableTop, { width: colWidths.actor });
+        xPos += colWidths.actor;
+        doc.text('Action', xPos, tableTop, { width: colWidths.action });
+        xPos += colWidths.action;
+        doc.text('Entity', xPos, tableTop, { width: colWidths.entity });
+        xPos += colWidths.entity;
+        doc.text('Details', xPos, tableTop, { width: colWidths.details });
+
+        // Draw line under header
+        doc.moveTo(50, tableTop + 15)
+          .lineTo(doc.page.width - 50, tableTop + 15)
+          .stroke('#2563eb');
+
+        doc.y = tableTop + 20;
+
+        // Table rows
+        doc.fillColor('#000000')
+          .fontSize(7)
+          .font('Helvetica');
+
+        logs.forEach((log, index) => {
+          if (doc.y > doc.page.height - 100) {
+            doc.addPage();
+            doc.y = 50;
+          }
+
+          const rowY = doc.y;
+          xPos = 50;
+
+          // Date
+          const dateStr = new Date(log.createdAt).toLocaleString('en-US', {
+            month: '2-digit',
+            day: '2-digit',
+            year: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          doc.text(dateStr, xPos, rowY, { width: colWidths.date });
+
+          // Actor
+          xPos += colWidths.date;
+          doc.text(log.actorType || '-', xPos, rowY, { width: colWidths.actor });
+
+          // Action
+          xPos += colWidths.actor;
+          doc.text(log.action || '-', xPos, rowY, { width: colWidths.action });
+
+          // Entity
+          xPos += colWidths.action;
+          doc.text(log.entity || '-', xPos, rowY, { width: colWidths.entity });
+
+          // Details
+          xPos += colWidths.entity;
+          const details = log.payload ? JSON.stringify(log.payload).substring(0, 50) : '-';
+          doc.text(details, xPos, rowY, { width: colWidths.details });
+
+          doc.y += 15;
+
+          // Alternate row background (light gray)
+          if (index % 2 === 0) {
+            doc.rect(50, rowY - 2, doc.page.width - 100, 15)
+              .fillOpacity(0.05)
+              .fill('#000000')
+              .fillOpacity(1);
+          }
+        });
+
+        // Footer
+        doc.fontSize(8)
+          .fillColor('#666666')
+          .text('E-Voting System - Audit Log', 50, doc.page.height - 50, { align: 'center', width: doc.page.width - 100 });
+
+        doc.end();
+        return;
       }
       res.json({ logs });
     } else {
